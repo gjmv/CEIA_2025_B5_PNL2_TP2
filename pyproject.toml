@@ -1,0 +1,65 @@
+[project]
+name = "ceia-2025-b5-pnl2-tp2"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "hf-xet>=1.2.0",
+    "iprogress>=0.4",
+    "ipykernel>=6.31.0",
+    "jupyter>=1.1.1",
+    "langchain>=1.1.0",
+    "langchain-classic>=1.0.0",
+    "langchain-community>=0.4.1",
+    "langchain-groq>=1.1.0",
+    "langchain-huggingface>=1.1.0",
+    "langchain-openai>=1.1.0",
+    "langchain-pinecone>=0.2.13",
+    "pinecone<8.0.0",
+    "pypdf>=6.4.0",
+    "python-dotenv>=1.2.1",
+    "sentence-transformers>=5.1.2",
+    "torch>=2.9.1",
+    "torchaudio>=2.9.1",
+    "torchvision>=0.24.1",
+    "tqdm>=4.67.1",
+]
+
+# Specific versions of torch, torchvision, and torchaudio are installed based on the extra feature
+[project.optional-dependencies]
+cpu = ["torch==2.9.1", "torchvision==0.24.1", "torchaudio==2.9.1"]
+cu130 = ["torch==2.9.1", "torchvision==0.24.1", "torchaudio==2.9.1"]
+
+[tool.uv]
+conflicts = [
+  [
+    { extra = "cpu" },
+    { extra = "cu130" },
+  ],
+]
+
+[tool.uv.sources]
+# The torch, torchvision, and torchaudio packages are installed from the pytorch-cpu and pytorch-cu124 indexes
+torch = [
+  { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+torchvision = [
+  { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+torchaudio = [
+  { index = "pytorch-cpu", extra = "cpu" },
+  { index = "pytorch-cu130", extra = "cu130", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
