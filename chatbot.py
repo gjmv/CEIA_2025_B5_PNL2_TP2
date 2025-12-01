@@ -3,8 +3,8 @@
 # ========================================
 
 import streamlit as st           # Framework para crear aplicaciones web interactivas
-import os                      # Para acceso a variables de entorno
-from random import randint
+import os                        # Para acceso a variables de entorno
+from dotenv import load_dotenv
 
 # Importaciones específicas de LangChain para gestión de conversaciones
 from langchain_core.prompts import (
@@ -13,19 +13,16 @@ from langchain_core.prompts import (
     MessagesPlaceholder,          # Marcador de posición para el historial
     SystemMessagePromptTemplate,  # Template para mensajes del sistema
 )
-from langchain_classic.chains.conversation.memory import ConversationBufferWindowMemory  # Memoria de ventana deslizante
 from langchain_groq import ChatGroq              # Integración LangChain-Groq
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_pinecone import PineconeVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.chat_history import BaseChatMessageHistory
 
-from dotenv import load_dotenv
-load_dotenv()
+load_dotenv() # Cargar variables de entorno desde el archivo .env
 
 def main():
     """
@@ -39,10 +36,7 @@ def main():
     
     Funcionalidades principales:
     - Interfaz web responsiva con Streamlit
-    - Memoria de conversación con longitud configurable
-    - Selección de diferentes modelos LLM
-    - Personalización del prompt del sistema
-    - Historial persistente durante la sesión
+    - Memoria de conversación persistente durante la sesión
     """
     
     # ========================================
@@ -68,15 +62,23 @@ def main():
     index_name = os.environ.get('PINECONE_INDEX_NAME') or 'ceia-2025-b5-pnl2-tp2'
     namespace = "documentos"
 
+    def load_or_create_from_session(key, default_value):
+        """ Auxiliar para crear variables si no existen y mantenerlas en sesion """
+        # Puede que no sea la mejor opción, pero mejora la performance al enviar las consultas
+        # ya que no se regeneran las variables cada vez que se recarga la página
+        if key not in st.session_state:
+            st.session_state[key] = default_value()
+        return st.session_state[key]
+    
     ### EMBEDDINGS
-    embedding_model = HuggingFaceEmbeddings(model_name="all-mpnet-base-v2")
+    embedding_model = load_or_create_from_session("embedding_model",  lambda: HuggingFaceEmbeddings(model_name="all-mpnet-base-v2"))
 
-    vectorstore = PineconeVectorStore(
+    vectorstore = load_or_create_from_session("vectorstore", lambda: PineconeVectorStore(
         pinecone_api_key=PINECONE_API_KEY,
         index_name=index_name,
         embedding=embedding_model,
         namespace=namespace,
-    )
+    ))
     retriever=vectorstore.as_retriever()
 
     # ========================================
@@ -87,32 +89,43 @@ def main():
         st.session_state['session_history'] = ChatMessageHistory()
 
     # Configurar el título y descripción de la aplicación
-    st.title("🤖 Chatbot CEIA con Memoria Persistente")
+    st.title("🤖 Chatbot CEIA con memoria conversacional persistente durante la sesión.")
     st.markdown("""
-    **¡Bienvenido al chatbot educativo!** 
+    **¡Bienvenido al chatbot CEIA - PNL2 - TP2!** 
     
     Este chatbot utiliza:
     - 🧠 **Memoria conversacional**: Recuerda el contexto de tu conversación
-    - 🔄 **Modelos intercambiables**: Puedes elegir diferentes LLMs
-    - ⚙️ **Personalización**: Configura el comportamiento del asistente
+    - 🔄 **Modelo llama-3.1-8b-instant**: Destacado en tareas de propósito general
+    - ⚙️ **Pinecone**: Almacenamiento de documentos para la búsqueda de respuestas
     - 🚀 **Powered by Groq**: Respuestas rápidas y precisas
+    - 📚 **CV del chatbot**: Respuestas basadas en el CV de Rob Otto.
     """)
 
     # ========================================
     # PANEL DE CONFIGURACIÓN LATERAL
     # ========================================
     
-    st.sidebar.title('⚙️ Configuración del Chatbot')
+    # Custom CSS to modify sidebar width
+    st.markdown(
+        """
+        <style>
+        section[data-testid="stSidebar"] {
+            width: 400px !important; # Set the desired width here
+        }
+        </style>
+        """,
+        unsafe_allow_html=True)
+    st.sidebar.title('⚙️ Características del Chatbot')
     st.sidebar.markdown("---")
     
     # Input para el prompt del sistema - Define la personalidad y comportamiento del bot
     st.sidebar.subheader("🎭 Personalidad del Bot")
     system_prompt = st.sidebar.text_area(
         "Mensaje del sistema:",
-        value="Eres un bot que responde preguntas sobre documentos proporcionados. "
-              "Usa únicamente el contexto dado para responder."
+        value="Eres un bot que responde preguntas sobre documentos proporcionados.\n"
+              "Usa únicamente el contexto dado para responder.\n"
               "Si la respuesta no está en el contexto, di: "
-              "'No te puedo proporcionar la información, ya que no existe en mi base de datos.'"
+              "'No te puedo proporcionar la información, ya que no existe en mi base de datos.'\n"
               "Sé preciso y conciso.",
         height=300,
         disabled=True,
@@ -128,9 +141,9 @@ def main():
     def get_session_history(session_id: str) -> BaseChatMessageHistory:
         return st.session_state['session_history']
 
-    # Botón para limpiar el historial
-    if st.sidebar.button("🗑️ Limpiar Conversación"):
-        st.session_state['session_history'] = ChatMessageHistory()
+    # Botón para limpiar el historial y recargar todas las variables
+    if st.sidebar.button("🗑️ Limpiar Conversación y reiniciar"):
+        st.session_state = {}
         st.sidebar.success("✅ Conversación limpiada")
         st.rerun()  # Recargar la aplicación
     
@@ -143,7 +156,8 @@ def main():
     user_question = st.text_input(
         "Escribe tu mensaje aquí:",
         placeholder="Por ejemplo: Que habilidades tiene Rob Otto?",
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        key="user_question"
     )
 
 
@@ -153,12 +167,12 @@ def main():
     
     # Inicializar el cliente de ChatGroq con las configuraciones seleccionadas
     try:
-        groq_chat = ChatGroq(
+        groq_chat = load_or_create_from_session("groq_chat", lambda: ChatGroq(
             groq_api_key=groq_api_key,     # Clave API para autenticación
-            model_name=model,              # Modelo seleccionado por el usuario
+            model_name=model,              # Modelo seleccionado
             temperature=0.7,               # Creatividad de las respuestas (0=determinista, 1=creativo)
             max_tokens=1000,               # Máximo número de tokens en la respuesta
-        )
+        ))
         st.sidebar.success("✅ Modelo conectado correctamente")
     except Exception as e:
         st.sidebar.error(f"❌ Error al conectar con Groq: {str(e)}")
@@ -244,21 +258,20 @@ def main():
     # ========================================
     
     # Panel expandible con información educativa
-    with st.expander("📚 Información Técnica para Estudiantes"):
+    with st.expander("📚 Información Técnica"):
         st.markdown("""
         **¿Cómo funciona este chatbot?**
         
-        1. **Memoria Conversacional**: Utiliza `ConversationBufferWindowMemory` para recordar contexto
+        1. **Memoria Conversacional durante la sesión**: Utiliza `InMemoryChatMessageHistory` para recordar contexto
         2. **Templates de Prompts**: Estructura los mensajes de manera consistente
-        3. **Cadenas LLM**: `LLMChain` conecta el modelo con la lógica de conversación
+        3. **Cadenas LLM**: `create_stuff_documents_chain` y `create_retrieval_chain` conectan el modelo con la lógica de conversación y recuperación de documentos
         4. **Estado de Sesión**: Streamlit mantiene el historial durante la sesión
         5. **Integración Groq**: Acceso rápido a modelos de lenguaje modernos
         
         **Conceptos Clave:**
         - **System Prompt**: Define la personalidad del chatbot
-        - **Memory Window**: Controla cuánto contexto previo se incluye
+        - **Memory Chat**: Conserva el historial de la conversación durante la sesión para mantener la coherencia
         - **Token Limits**: Gestiona el costo y velocidad de las respuestas
-        - **Model Selection**: Diferentes modelos para diferentes necesidades
         
         **Arquitectura del Sistema:**
         ```
@@ -270,7 +283,7 @@ def main():
     
     # Pie de página con información del curso
     st.markdown("---")
-    st.markdown("**📖 Clase VI - CEIA LLMIAG** | Ejemplo educativo de chatbot con memoria persistente")
+    st.markdown("**📖 CEIA - 2025 - B5 - PNL2 - TP2** | Trabajo Práctico 2 - Procesamiento del Lenguaje Natural 2")
 
 
 if __name__ == "__main__":
