@@ -24,13 +24,13 @@ Este proyecto tiene como objetivo implementar técnicas avanzadas en Retrieval-A
 
 1. [Diagrama](#diagrama)
 2. [Preparación](#preparación)
-    - [Pinecone](#Pinecone)
-    - [Groq](#Groq)
-    - [Langchain](#Langchain)
+    - [Pinecone](#pinecone)
+    - [Groq](#groq)
+    - [Langchain](#langchain)
 3. [Población inicial](#población-inicial-de-bases-de-datos-vectoriales)
-4. [Retrieval-Augmented Generation (RAG)](#Retrieval-Augmented-Generation-(RAG))
-5. [Aplicación web](#Aplicación-web)
-6. [Despliegue](#Despliegue)
+4. [Retrieval-Augmented Generation (RAG)](#retrieval-augmented-generation-rag)
+5. [Aplicación web](#aplicación-web)
+6. [Despliegue](#despliegue)
 
 ## Diagrama
 
@@ -47,11 +47,13 @@ Pinecone proporciona una solución de base de datos vectorial escalable, que per
 
 Como mínimo se deben configurar las siguientes variables de entorno:  
 `PINECONE_API_KEY`  
+
 Para la carga inicial, adicionalmente se pueden configurar:  
 `PINECONE_CLOUD` (default: 'aws')  
 `PINECONE_REGION` (default: 'us-east-1')  
-`PINECONE_INDEX_NAME` (default: 'ceia-2025-b5-pnl2-tp2')
+`PINECONE_INDEX_NAME` (default: 'ceia-2025-b5-pnl2-tp2')  
 `PINECONE_RECREATE_INDEX` (default: False)  
+
 Para el chatbot, adicionalmente se puede configurar:  
 `PINECONE_INDEX_NAME` (default: 'ceia-2025-b5-pnl2-tp2')
 
@@ -75,7 +77,7 @@ El código en el archivo [chatbot.py](chatbot.py) implementa RAG (Retrieval-Augm
 
 ## Aplicación web
 
-La aplicación de Streamlit se instancia en el archivo [application.py](application.py).  
+La aplicación de Streamlit se instancia en el archivo [chatbot.py](chatbot.py).  
 El contenido es generado dinamicamente y esta embebido en el código fuente.
 
 ## Despliegue
