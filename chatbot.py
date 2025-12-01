@@ -1,32 +1,3 @@
-"""
-Chatbot con Memoria Persistente usando LangChain y Groq
-=====================================================
-
-Este archivo implementa un chatbot con interfaz web usando Streamlit que:
-- Mantiene memoria de conversaciones anteriores
-- Utiliza diferentes modelos de LLM a través de Groq
-- Permite personalización del comportamiento del bot
-- Gestiona la memoria conversacional automáticamente
-
-Tecnologías utilizadas:
-- Streamlit: Para la interfaz web
-- LangChain: Para gestión de memoria y cadenas de conversación
-- Groq: Como proveedor de modelos LLM
-- Python: Lenguaje de programación
-
-Autor: Clase VI - CEIA LLMIAG
-Curso: Large Language Models y Generative AI
-
-Instrucciones para ejecutar:
-    streamlit run chatbot_gestionada.py
-
-Requisitos:
-    pip install streamlit groq langchain langchain-groq
-
-Variables de entorno necesarias:
-    GROQ_API_KEY: Tu clave API de Groq (obtener en https://console.groq.com)
-"""
-
 # ========================================
 # IMPORTACIÓN DE LIBRERÍAS NECESARIAS
 # ========================================
@@ -50,6 +21,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_pinecone import PineconeVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_core.chat_history import BaseChatMessageHistory
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -110,6 +83,9 @@ def main():
     # CONFIGURACIÓN DE LA INTERFAZ PRINCIPAL
     # ========================================
     
+    if 'session_history' not in st.session_state:
+        st.session_state['session_history'] = ChatMessageHistory()
+
     # Configurar el título y descripción de la aplicación
     st.title("🤖 Chatbot CEIA con Memoria Persistente")
     st.markdown("""
@@ -138,61 +114,23 @@ def main():
               "Si la respuesta no está en el contexto, di: "
               "'No te puedo proporcionar la información, ya que no existe en mi base de datos.'"
               "Sé preciso y conciso.",
-        height=100,
+        height=300,
+        disabled=True,
         help="Define cómo debe comportarse el chatbot."
     )
 
     model = "llama-3.1-8b-instant"
     st.sidebar.info(f"Modelo {model}")
     
-    # Control deslizante para la longitud de memoria
-    st.sidebar.subheader("🧠 Configuración de Memoria")
-    conversational_memory_length = st.sidebar.slider(
-        'Longitud de la memoria conversacional:', 
-        min_value=1, 
-        max_value=10, 
-        value=5,
-        help="Número de intercambios anteriores que el bot recordará. Más memoria = mayor contexto pero mayor costo computacional"
-    )
-    
-    # Mostrar información sobre la memoria
-    st.sidebar.caption(f"💭 El bot recordará los últimos {conversational_memory_length} intercambios")
-
-    # ========================================
-    # CONFIGURACIÓN DE LA MEMORIA CONVERSACIONAL
-    # ========================================
-    
-    # Crear objeto de memoria con ventana deslizante
-    # ConversationBufferWindowMemory mantiene solo los últimos k intercambios
-    memory = ConversationBufferWindowMemory(
-        k=conversational_memory_length,        # Número de intercambios a recordar
-        memory_key="historial_chat",           # Clave para acceder al historial
-        return_messages=True                   # Devolver mensajes en formato estructurado
-    )
-    
     # ========================================
     # GESTIÓN DEL HISTORIAL DE CONVERSACIÓN
     # ========================================
-    
-    # Inicializar el historial de chat en el estado de la sesión de Streamlit
-    # st.session_state permite mantener datos entre ejecuciones de la aplicación
-    if 'historial_chat' not in st.session_state:
-        st.session_state.historial_chat = []
-        st.sidebar.success("💬 Nueva conversación iniciada")
-    else:
-        # Si ya existe historial, cargarlo en la memoria de LangChain
-        for message in st.session_state.historial_chat:
-            memory.save_context(
-                {'input': message['humano']},      # Mensaje del usuario
-                {'output': message['IA']}          # Respuesta del chatbot
-            )
-        
-        # Mostrar información del historial en la barra lateral
-        st.sidebar.info(f"💬 Conversación con {len(st.session_state.historial_chat)} mensajes")
-    
+    def get_session_history(session_id: str) -> BaseChatMessageHistory:
+        return st.session_state['session_history']
+
     # Botón para limpiar el historial
     if st.sidebar.button("🗑️ Limpiar Conversación"):
-        st.session_state.historial_chat = []
+        st.session_state['session_history'] = ChatMessageHistory()
         st.sidebar.success("✅ Conversación limpiada")
         st.rerun()  # Recargar la aplicación
     
@@ -263,11 +201,6 @@ def main():
                 question_answer_chain = create_stuff_documents_chain(groq_chat, prompt)
                 rag_chain = create_retrieval_chain(retriever, question_answer_chain)
                 
-                def get_session_history(session_id: str):
-                    # In a real application, this would fetch history from a persistent store
-                    print(memory.chat_memory)
-                    return memory.chat_memory # For this example, we'll return the same memory instance
-
                 conversational_rag_chain = RunnableWithMessageHistory(
                     rag_chain,
                     get_session_history,
@@ -283,19 +216,10 @@ def main():
                 response = conversational_rag_chain.invoke(
                     {"input": user_question},
                     config={
-                        "configurable": {"session_id": "user1_session1" }
+                        "configurable": {"session_id": "abc123" }
                     },  # constructs a key "abc123" in `store`.
                 )["answer"]
-                # ========================================
-                # ALMACENAMIENTO Y VISUALIZACIÓN
-                # ========================================
-                
-                # Crear un objeto mensaje para almacenar en el historial
-                message = {'humano': user_question, 'IA': response}
-                
-                # Agregar el mensaje al historial de la sesión
-                st.session_state.historial_chat.append(message)
-                
+ 
                 # ========================================
                 # MOSTRAR LA CONVERSACIÓN
                 # ========================================
@@ -307,10 +231,7 @@ def main():
                     {response}
                 </div>
                 """, unsafe_allow_html=True)
-                
-                # Información adicional sobre la respuesta
-                st.caption(f"📊 Modelo: {model} | 🧠 Memoria: {conversational_memory_length} mensajes")
-                
+
             except Exception as e:
                 raise e
                 # Manejo de errores durante el procesamiento
